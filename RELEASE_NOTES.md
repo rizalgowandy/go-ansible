@@ -1,4 +1,9 @@
-## undefined
+# Release notes
+
+## [undefined]
 
 ### Fixed
-- On `AnsiblePlaybookJSONResultsPlayTaskHostsItem`, fix `Unreachable` attribute type to bool #103
+
+- Bumps golang.org/x/crypto from 0.22.0 to 0.31.0
+- Bumps golang.org/x/net v0.24.0 to v0.33.0
+

@@ -10,10 +10,10 @@ import (
 	"os"
 	"strings"
 
-	"github.com/apenella/go-ansible/pkg/execute"
-	"github.com/apenella/go-ansible/pkg/options"
-	"github.com/apenella/go-ansible/pkg/playbook"
-	"github.com/apenella/go-ansible/pkg/stdoutcallback/results"
+	"github.com/apenella/go-ansible/v2/pkg/execute"
+	"github.com/apenella/go-ansible/v2/pkg/execute/configuration"
+	"github.com/apenella/go-ansible/v2/pkg/execute/result/transformer"
+	"github.com/apenella/go-ansible/v2/pkg/playbook"
 	errors "github.com/apenella/go-common-utils/error"
 	"github.com/spf13/cobra"
 )
@@ -35,12 +35,12 @@ func init() {
 }
 
 var rootCmd = &cobra.Command{
-	Use:   "cobra-cmd-ansibleplaybook",
-	Short: "cobra-cmd-ansibleplaybook",
-	Long: `cobra-cmd-ansibleplaybook is an example which show how to use go-ansible library from cobra cli
+	Use:   "ansibleplaybook-cobra-cmd",
+	Short: "ansibleplaybook-cobra-cmd",
+	Long: `ansibleplaybook-cobra-cmd is an example which show how to use go-ansible library from cobra cli
 	
  Run the example:
-go run cobra-cmd-ansibleplaybook.go -L -i 127.0.0.1, -p site.yml -e example="hello go-ansible!"
+go run ansibleplaybook-cobra-cmd.go -L -i 127.0.0.1, -p site.yml -e example="hello go-ansible!"
 `,
 	RunE: commandHandler,
 }
@@ -60,35 +60,37 @@ func commandHandler(cmd *cobra.Command, args []string) error {
 		return errors.New("(commandHandler)", "Error parsing extra variables", err)
 	}
 
-	ansiblePlaybookConnectionOptions := &options.AnsibleConnectionOptions{}
-	if connectionLocal {
-		ansiblePlaybookConnectionOptions.Connection = "local"
-	}
-
 	ansiblePlaybookOptions := &playbook.AnsiblePlaybookOptions{
 		Inventory: inventory,
 	}
 
-	for keyVar, valueVar := range vars {
-		ansiblePlaybookOptions.AddExtraVar(keyVar, valueVar)
+	if connectionLocal {
+		ansiblePlaybookOptions.Connection = "local"
 	}
 
-	playbook := &playbook.AnsiblePlaybookCmd{
-		Playbooks:         playbookFiles,
-		ConnectionOptions: ansiblePlaybookConnectionOptions,
-		Options:           ansiblePlaybookOptions,
-		Exec: execute.NewDefaultExecute(
+	for keyVar, valueVar := range vars {
+		_ = ansiblePlaybookOptions.AddExtraVar(keyVar, valueVar)
+	}
+
+	playbookCmd := playbook.NewAnsiblePlaybookCmd(
+		playbook.WithPlaybooks(playbookFiles...),
+		playbook.WithPlaybookOptions(ansiblePlaybookOptions),
+	)
+
+	exec := configuration.NewAnsibleWithConfigurationSettingsExecute(
+		execute.NewDefaultExecute(
+			execute.WithCmd(playbookCmd),
+			execute.WithErrorEnrich(playbook.NewAnsiblePlaybookErrorEnrich()),
 			execute.WithTransformers(
-				results.Prepend("cobra-cmd-ansibleplaybook example"),
+				transformer.Prepend("Go-ansible example with become"),
 			),
 		),
-	}
+		configuration.WithAnsibleForceColor(),
+	)
 
-	options.AnsibleForceColor()
-
-	err = playbook.Run(context.TODO())
+	err = exec.Execute(context.TODO())
 	if err != nil {
-		return err
+		panic(err)
 	}
 
 	return nil

@@ -6,15 +6,15 @@ import (
 	"os"
 	"os/signal"
 
-	"github.com/apenella/go-ansible/pkg/execute"
-	"github.com/apenella/go-ansible/pkg/options"
-	"github.com/apenella/go-ansible/pkg/playbook"
-	"github.com/apenella/go-ansible/pkg/stdoutcallback/results"
+	"github.com/apenella/go-ansible/v2/pkg/execute"
+	"github.com/apenella/go-ansible/v2/pkg/execute/configuration"
+	"github.com/apenella/go-ansible/v2/pkg/execute/result/transformer"
+	"github.com/apenella/go-ansible/v2/pkg/playbook"
 	"github.com/fatih/color"
 )
 
 // customTrasnformer
-func outputColored() results.TransformerFunc {
+func outputColored() transformer.TransformerFunc {
 	return func(message string) string {
 		yellow := color.New(color.FgYellow).SprintFunc()
 		return fmt.Sprintf("%s", yellow(message))
@@ -26,28 +26,28 @@ func main() {
 	signalChan := make(chan os.Signal, 1)
 	ctx, cancel := context.WithCancel(context.Background())
 
-	ansiblePlaybookConnectionOptions := &options.AnsibleConnectionOptions{
-		Connection: "local",
-	}
-
 	ansiblePlaybookOptions := &playbook.AnsiblePlaybookOptions{
-		Inventory: "127.0.0.1,",
+		Connection: "local",
+		Inventory:  "127.0.0.1,",
 	}
 
-	playbook := &playbook.AnsiblePlaybookCmd{
-		Playbooks:         []string{"site.yml"},
-		ConnectionOptions: ansiblePlaybookConnectionOptions,
-		Options:           ansiblePlaybookOptions,
-		Exec: execute.NewDefaultExecute(
-			execute.WithEnvVar("ANSIBLE_FORCE_COLOR", "true"),
+	playbookCmd := playbook.NewAnsiblePlaybookCmd(
+		playbook.WithPlaybooks("site.yml"),
+		playbook.WithPlaybookOptions(ansiblePlaybookOptions),
+	)
+
+	exec := configuration.NewAnsibleWithConfigurationSettingsExecute(
+		execute.NewDefaultExecute(
+			execute.WithCmd(playbookCmd),
+			execute.WithErrorEnrich(playbook.NewAnsiblePlaybookErrorEnrich()),
 			execute.WithTransformers(
 				outputColored(),
-				results.Prepend("Go-ansible example"),
-				results.LogFormat(results.DefaultLogFormatLayout, results.Now),
+				transformer.Prepend("Go-ansible example"),
+				transformer.LogFormat(transformer.DefaultLogFormatLayout, transformer.Now),
 			),
-			execute.WithShowDuration(),
 		),
-	}
+		configuration.WithAnsibleForceColor(),
+	)
 
 	signal.Notify(signalChan, os.Interrupt)
 	defer func() {
@@ -63,10 +63,9 @@ func main() {
 		}
 	}()
 
-	err := playbook.Run(ctx)
+	err := exec.Execute(context.TODO())
 	if err != nil {
-		fmt.Println(err.Error())
-		os.Exit(1)
+		panic(err)
 	}
 
 }

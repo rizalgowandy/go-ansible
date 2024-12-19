@@ -3,32 +3,33 @@ package main
 import (
 	"context"
 
-	"github.com/apenella/go-ansible/pkg/options"
-	"github.com/apenella/go-ansible/pkg/playbook"
+	"github.com/apenella/go-ansible/v2/pkg/execute"
+	"github.com/apenella/go-ansible/v2/pkg/playbook"
 )
 
 func main() {
 
-	ansiblePlaybookConnectionOptions := &options.AnsibleConnectionOptions{
+	ansiblePlaybookOptions := &playbook.AnsiblePlaybookOptions{
 		Connection: "local",
 		User:       "aleix",
-	}
-
-	ansiblePlaybookOptions := &playbook.AnsiblePlaybookOptions{
-		Inventory: "127.0.0.1,",
+		Inventory:  "127.0.0.1,",
 		ExtraVarsFile: []string{
 			"@vars-file1.yml",
 			"@vars-file2.yml",
 		},
 	}
 
-	playbook := &playbook.AnsiblePlaybookCmd{
-		Playbooks:         []string{"site.yml"},
-		ConnectionOptions: ansiblePlaybookConnectionOptions,
-		Options:           ansiblePlaybookOptions,
-	}
+	playbookCmd := playbook.NewAnsiblePlaybookCmd(
+		playbook.WithPlaybooks("site.yml"),
+		playbook.WithPlaybookOptions(ansiblePlaybookOptions),
+	)
 
-	err := playbook.Run(context.TODO())
+	exec := execute.NewDefaultExecute(
+		execute.WithCmd(playbookCmd),
+		execute.WithErrorEnrich(playbook.NewAnsiblePlaybookErrorEnrich()),
+	)
+
+	err := exec.Execute(context.TODO())
 	if err != nil {
 		panic(err)
 	}

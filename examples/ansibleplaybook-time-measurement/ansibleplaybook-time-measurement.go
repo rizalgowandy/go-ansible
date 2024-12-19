@@ -2,39 +2,40 @@ package main
 
 import (
 	"context"
+	"fmt"
 
-	"github.com/apenella/go-ansible/pkg/execute"
-	"github.com/apenella/go-ansible/pkg/execute/measure"
-	"github.com/apenella/go-ansible/pkg/options"
-	"github.com/apenella/go-ansible/pkg/playbook"
+	"github.com/apenella/go-ansible/v2/pkg/execute"
+	"github.com/apenella/go-ansible/v2/pkg/execute/configuration"
+	"github.com/apenella/go-ansible/v2/pkg/execute/measure"
+	"github.com/apenella/go-ansible/v2/pkg/playbook"
 )
 
 func main() {
 
-	ansiblePlaybookConnectionOptions := &options.AnsibleConnectionOptions{
-		Connection: "local",
-	}
-
 	ansiblePlaybookOptions := &playbook.AnsiblePlaybookOptions{
-		Inventory: "127.0.0.1,",
+		Connection: "local",
+		Inventory:  "127.0.0.1,",
 	}
 
-	executorTimeMeasurement := measure.NewExecutorTimeMeasurement(
-		execute.NewDefaultExecute(
-			execute.WithEnvVar("ANSIBLE_FORCE_COLOR", "true"),
-		),
-		measure.WithShowDuration(),
+	playbookCmd := playbook.NewAnsiblePlaybookCmd(
+		playbook.WithPlaybooks("site.yml"),
+		playbook.WithPlaybookOptions(ansiblePlaybookOptions),
 	)
 
-	playbook := &playbook.AnsiblePlaybookCmd{
-		Playbooks:         []string{"site.yml"},
-		ConnectionOptions: ansiblePlaybookConnectionOptions,
-		Options:           ansiblePlaybookOptions,
-		Exec:              executorTimeMeasurement,
+	exec := measure.NewExecutorTimeMeasurement(
+		configuration.NewAnsibleWithConfigurationSettingsExecute(
+			execute.NewDefaultExecute(
+				execute.WithCmd(playbookCmd),
+				execute.WithErrorEnrich(playbook.NewAnsiblePlaybookErrorEnrich()),
+			),
+			configuration.WithAnsibleForceColor(),
+		),
+	)
+
+	err := exec.Execute(context.TODO())
+	if err != nil {
+		fmt.Println(err.Error())
 	}
 
-	err := playbook.Run(context.TODO())
-	if err != nil {
-		panic(err)
-	}
+	fmt.Println("Duration: ", exec.Duration().String())
 }

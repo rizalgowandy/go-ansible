@@ -3,41 +3,39 @@ package main
 import (
 	"context"
 
-	"github.com/apenella/go-ansible/pkg/execute"
-	"github.com/apenella/go-ansible/pkg/options"
-	"github.com/apenella/go-ansible/pkg/playbook"
-	"github.com/apenella/go-ansible/pkg/stdoutcallback/results"
+	"github.com/apenella/go-ansible/v2/pkg/execute"
+	"github.com/apenella/go-ansible/v2/pkg/execute/result/transformer"
+	"github.com/apenella/go-ansible/v2/pkg/playbook"
 )
 
 func main() {
 
-	ansiblePlaybookConnectionOptions := &options.AnsibleConnectionOptions{
-		User: "apenella",
-	}
-
 	ansiblePlaybookOptions := &playbook.AnsiblePlaybookOptions{
-		Inventory: "127.0.0.1,",
-	}
-
-	ansiblePlaybookPrivilegeEscalationOptions := &options.AnsiblePrivilegeEscalationOptions{
+		User:          "apenella",
+		Inventory:     "127.0.0.1,",
 		Become:        true,
 		AskBecomePass: true,
 	}
 
-	playbook := &playbook.AnsiblePlaybookCmd{
-		Playbooks:                  []string{"site.yml"},
-		ConnectionOptions:          ansiblePlaybookConnectionOptions,
-		PrivilegeEscalationOptions: ansiblePlaybookPrivilegeEscalationOptions,
-		Options:                    ansiblePlaybookOptions,
-		Exec: execute.NewDefaultExecute(
-			execute.WithEnvVar("ANSIBLE_FORCE_COLOR", "true"),
-			execute.WithTransformers(
-				results.Prepend("Go-ansible example with become"),
-			),
-		),
-	}
+	playbookCmd := playbook.NewAnsiblePlaybookCmd(
+		playbook.WithPlaybooks("site.yml"),
+		playbook.WithPlaybookOptions(ansiblePlaybookOptions),
+	)
 
-	err := playbook.Run(context.TODO())
+	exec := execute.NewDefaultExecute(
+		execute.WithCmd(playbookCmd),
+		execute.WithErrorEnrich(playbook.NewAnsiblePlaybookErrorEnrich()),
+		execute.WithEnvVars(
+			map[string]string{
+				"ANSIBLE_FORCE_COLOR": "true",
+			},
+		),
+		execute.WithTransformers(
+			transformer.Prepend("Go-ansible example with become"),
+		),
+	)
+
+	err := exec.Execute(context.TODO())
 	if err != nil {
 		panic(err)
 	}

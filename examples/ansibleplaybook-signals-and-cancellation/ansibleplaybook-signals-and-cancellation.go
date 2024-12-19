@@ -6,10 +6,10 @@ import (
 	"os"
 	"os/signal"
 
-	"github.com/apenella/go-ansible/pkg/execute"
-	"github.com/apenella/go-ansible/pkg/options"
-	"github.com/apenella/go-ansible/pkg/playbook"
-	"github.com/apenella/go-ansible/pkg/stdoutcallback/results"
+	"github.com/apenella/go-ansible/v2/pkg/execute"
+	"github.com/apenella/go-ansible/v2/pkg/execute/configuration"
+	"github.com/apenella/go-ansible/v2/pkg/execute/result/transformer"
+	"github.com/apenella/go-ansible/v2/pkg/playbook"
 )
 
 func main() {
@@ -17,25 +17,27 @@ func main() {
 	signalChan := make(chan os.Signal, 1)
 	ctx, cancel := context.WithCancel(context.Background())
 
-	ansiblePlaybookConnectionOptions := &options.AnsibleConnectionOptions{
+	ansiblePlaybookOptions := &playbook.AnsiblePlaybookOptions{
 		Connection: "local",
 		User:       "aleix",
+		Inventory:  "127.0.0.1,",
 	}
 
-	ansiblePlaybookOptions := &playbook.AnsiblePlaybookOptions{
-		Inventory: "127.0.0.1,",
-	}
+	playbookCmd := playbook.NewAnsiblePlaybookCmd(
+		playbook.WithPlaybooks("site.yml"),
+		playbook.WithPlaybookOptions(ansiblePlaybookOptions),
+	)
 
-	playbook := &playbook.AnsiblePlaybookCmd{
-		Playbooks:         []string{"site.yml"},
-		ConnectionOptions: ansiblePlaybookConnectionOptions,
-		Options:           ansiblePlaybookOptions,
-		Exec: execute.NewDefaultExecute(
+	exec := configuration.NewAnsibleWithConfigurationSettingsExecute(
+		execute.NewDefaultExecute(
+			execute.WithCmd(playbookCmd),
+			execute.WithErrorEnrich(playbook.NewAnsiblePlaybookErrorEnrich()),
 			execute.WithTransformers(
-				results.Prepend("Go-ansible example"),
+				transformer.Prepend("[ansibleplaybook-signals-and-cancellation]"),
 			),
 		),
-	}
+		configuration.WithAnsibleForceColor(),
+	)
 
 	signal.Notify(signalChan, os.Interrupt)
 	defer func() {
@@ -51,7 +53,7 @@ func main() {
 		}
 	}()
 
-	err := playbook.Run(ctx)
+	err := exec.Execute(ctx)
 	if err != nil {
 		fmt.Println(err.Error())
 		os.Exit(1)

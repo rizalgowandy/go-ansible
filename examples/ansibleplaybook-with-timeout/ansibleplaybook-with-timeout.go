@@ -6,16 +6,15 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/apenella/go-ansible/pkg/execute"
-	"github.com/apenella/go-ansible/pkg/options"
-	"github.com/apenella/go-ansible/pkg/playbook"
-	"github.com/apenella/go-ansible/pkg/stdoutcallback/results"
+	"github.com/apenella/go-ansible/v2/pkg/execute"
+	"github.com/apenella/go-ansible/v2/pkg/execute/result/transformer"
+	"github.com/apenella/go-ansible/v2/pkg/playbook"
 )
 
 func main() {
 
 	var timeout int
-	flag.IntVar(&timeout, "timeout", 15, "Timeout in seconds")
+	flag.IntVar(&timeout, "timeout", 10, "Timeout in seconds")
 	flag.Parse()
 
 	fmt.Printf("Timeout: %d seconds\n", timeout)
@@ -23,28 +22,26 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(timeout)*time.Second)
 	defer cancel()
 
-	ansiblePlaybookConnectionOptions := &options.AnsibleConnectionOptions{
-		Connection: "local",
-		User:       "apenella",
-	}
-
 	ansiblePlaybookOptions := &playbook.AnsiblePlaybookOptions{
-		Inventory: "127.0.0.1,",
+		User:       "apenella",
+		Connection: "local",
+		Inventory:  "127.0.0.1,",
 	}
 
-	playbook := &playbook.AnsiblePlaybookCmd{
-		Playbooks:         []string{"site.yml"},
-		ConnectionOptions: ansiblePlaybookConnectionOptions,
-		Options:           ansiblePlaybookOptions,
-		Exec: execute.NewDefaultExecute(
-			execute.WithTransformers(
-				results.Prepend("Go-ansible example"),
-			),
+	playbookCmd := playbook.NewAnsiblePlaybookCmd(
+		playbook.WithPlaybooks("site.yml"),
+		playbook.WithPlaybookOptions(ansiblePlaybookOptions),
+	)
+
+	exec := execute.NewDefaultExecute(
+		execute.WithCmd(playbookCmd),
+		execute.WithErrorEnrich(playbook.NewAnsiblePlaybookErrorEnrich()),
+		execute.WithTransformers(
+			transformer.Prepend("Go-ansible example"),
 		),
-		StdoutCallback: "json",
-	}
+	)
 
-	err := playbook.Run(ctx)
+	err := exec.Execute(ctx)
 	if err != nil {
 		panic(err)
 	}

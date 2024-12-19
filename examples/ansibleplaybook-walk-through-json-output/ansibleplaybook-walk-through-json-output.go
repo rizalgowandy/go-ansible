@@ -7,10 +7,10 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/apenella/go-ansible/pkg/execute"
-	"github.com/apenella/go-ansible/pkg/options"
-	"github.com/apenella/go-ansible/pkg/playbook"
-	"github.com/apenella/go-ansible/pkg/stdoutcallback/results"
+	"github.com/apenella/go-ansible/v2/pkg/execute"
+	results "github.com/apenella/go-ansible/v2/pkg/execute/result/json"
+	"github.com/apenella/go-ansible/v2/pkg/execute/stdoutcallback"
+	"github.com/apenella/go-ansible/v2/pkg/playbook"
 )
 
 func main() {
@@ -20,28 +20,26 @@ func main() {
 
 	buff := new(bytes.Buffer)
 
-	ansiblePlaybookConnectionOptions := &options.AnsibleConnectionOptions{
+	ansiblePlaybookOptions := &playbook.AnsiblePlaybookOptions{
 		Connection: "local",
 		User:       "apenella",
+		Inventory:  "127.0.0.1,",
 	}
 
-	ansiblePlaybookOptions := &playbook.AnsiblePlaybookOptions{
-		Inventory: "127.0.0.1,",
-	}
-
-	execute := execute.NewDefaultExecute(
-		execute.WithWrite(io.Writer(buff)),
+	playbookCmd := playbook.NewAnsiblePlaybookCmd(
+		playbook.WithPlaybooks("site1.yml", "site2.yml"),
+		playbook.WithPlaybookOptions(ansiblePlaybookOptions),
 	)
 
-	playbook := &playbook.AnsiblePlaybookCmd{
-		Playbooks:         []string{"site1.yml", "site2.yml"},
-		Exec:              execute,
-		ConnectionOptions: ansiblePlaybookConnectionOptions,
-		Options:           ansiblePlaybookOptions,
-		StdoutCallback:    "json",
-	}
+	exec := stdoutcallback.NewJSONStdoutCallbackExecute(
+		execute.NewDefaultExecute(
+			execute.WithCmd(playbookCmd),
+			execute.WithErrorEnrich(playbook.NewAnsiblePlaybookErrorEnrich()),
+			execute.WithWrite(io.Writer(buff)),
+		),
+	)
 
-	err = playbook.Run(context.TODO())
+	err = exec.Execute(context.TODO())
 	if err != nil {
 		fmt.Println(err.Error())
 	}
@@ -58,10 +56,10 @@ func main() {
 
 	for _, play := range res.Plays {
 		for _, task := range play.Tasks {
-			if task.Task.Name == "walk-through-json-output-ansibleplaybook" {
+			if task.Task.Name == "ansibleplaybook-walk-through-json-output" {
 				for _, content := range task.Hosts {
 
-					err = json.Unmarshal([]byte(content.Stdout), &msgOutput)
+					err = json.Unmarshal([]byte(fmt.Sprint(content.Stdout)), &msgOutput)
 					if err != nil {
 						panic(err)
 					}
